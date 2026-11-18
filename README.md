@@ -76,5 +76,9 @@ Add both of these file-operation events (click **Add** after each one):
 
 *(Why: Required by Python's `zipfile` module, report writer, and subprocess pipe handles when opening and saving files.)*
 
+## Notes
+- **Linux Users:** Requires `zenity` (GNOME/GTK) or `kdialog` (KDE/Qt) installed for the file picker dialog.
+- **Manual Install:** If installing outside Orca Cloud, download `makerworld_importer_any.py` and load it via **Plugins -> Browse plugins -> Install local plugin**.
+
 ## License
 MIT
