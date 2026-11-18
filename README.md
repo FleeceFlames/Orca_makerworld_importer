@@ -27,11 +27,54 @@ This plugin solves that by taking your active **Printer + Bed + Filament + Proce
 3. Select the downloaded MakerWorld `.3mf` file.
 4. Open the newly generated `{filename}_{printer}.3mf` file in OrcaSlicer and review `{filename}_{printer}_report.txt` for any warnings or skipped settings before slicing.
 
-## Permissions Explained (No Full Access Required)
-You do **not** need to grant **Full Access** to use this plugin:
-- **Network Access:** Not used. Leave disabled.
-- **Execution (`ProcessCreate`):** Used solely to launch your operating system's native file picker dialog so you can choose a `.3mf` file.
-- **File Read/Write:** Used only to read your selected `.3mf` and write the converted `.3mf` and `_report.txt` in the same folder.
+## Permissions Setup (Required Before Running)
+
+OrcaSlicer 2.5.0+ runs plugins inside a strict security sandbox. Before using the plugin, open **Plugins -> MakerWorld Settings Importer -> Permissions** and choose either **Option A (1-Click)** or **Option B (Strict Granular Setup)**.
+
+### Option A: 1-Click Setup (Easiest)
+- Toggle **Full access** to **ON** at the top of the **Permissions** tab.
+- *(Note: This plugin is 100% offline, single-file open-source Python and never uses network access.)*
+
+---
+
+### Option B: Strict Granular Setup (Without Full Access)
+If you prefer to keep **Full access** turned **OFF**, configure the sections in the **Permissions** tab exactly as shown below:
+
+#### 1. Files and folders
+Add the folder where you store/download your `.3mf` files (ending with `\*` on Windows or `/*` on macOS/Linux) to **BOTH** **Read** and **Read and write**:
+- **Read:**
+  `C:\Users\YourName\Desktop\3DPrinter\Projects\*` *(or `C:\Users\YourName\Downloads\*`)*
+- **Read and write:**
+  `C:\Users\YourName\Desktop\3DPrinter\Projects\*` *(or `C:\Users\YourName\Downloads\*`)*
+
+*(Why: Grants permission to read the original MakerWorld `.3mf` and write the converted `.3mf` and `_report.txt` in that directory.)*
+
+#### 2. Network access
+- Leave completely **empty / disabled** (this plugin works 100% offline).
+
+#### 3. Execution -> Processes
+Add the file-picker process command(s) for your operating system:
+- **Windows (add both entries):**
+  1. `powershell`
+  2. `powershell -NoProfile -STA -Command "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Add-Type -AssemblyName System.Windows.Forms; $f = New-Object System.Windows.Forms.OpenFileDialog; $f.Title = 'Select MakerWorld 3MF File'; $f.Filter = '3MF Files (*.3mf)|*.3mf'; if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }"`
+- **macOS:**
+  - `osascript`
+- **Linux:**
+  - `zenity` *(or `kdialog`)*
+
+*(Why: Allows the plugin to open your operating system's native file selection window.)*
+
+#### 4. Execution -> Threading
+- Toggle **Allow this plugin to create threads** to **ON**.
+
+*(Why: Python's `subprocess.run()` internally spawns reader threads to capture the file path returned by the OS file picker.)*
+
+#### 5. Audit events -> Events
+Add both of these file-operation events (click **Add** after each one):
+- `FsRead:open`
+- `FsWrite:open`
+
+*(Why: Required by Python's `zipfile` module, report writer, and subprocess pipe handles when opening and saving files.)*
 
 ## License
 MIT
