@@ -6,7 +6,7 @@
 # name = "MakerWorld Settings Importer"
 # description = "Safely imports MakerWorld 3MF process settings onto your active printer with nozzle, speed, and multi-color checks."
 # author = "FleeceFlames"
-# version = "1.0.1"
+# version = "1.0.2"
 # ///
 # SPDX-License-Identifier: MIT
 
@@ -152,6 +152,20 @@ def normalize_orca_value(val):
         return [normalize_orca_value(v) for v in val]
     return val
 
+def align_value_shape(new_val, old_val):
+    """
+    Aligns Bambu vs. OrcaSlicer scalar/list representation differences so
+    identical values aren't falsely flagged as changed and OrcaSlicer's
+    expected JSON type (scalar vs. per-extruder list) is preserved.
+    """
+    if isinstance(old_val, str) and isinstance(new_val, list) and len(new_val) == 1:
+        return str(new_val[0])
+    if isinstance(old_val, list):
+        if isinstance(new_val, str):
+            return [new_val] * max(1, len(old_val))
+        if isinstance(new_val, list) and len(new_val) == 1 and len(old_val) > 1:
+            return [new_val[0]] * len(old_val)
+    return new_val
 
 def to_float(val):
     """Safely extracts a float from a string, number, percentage string, or single-item list."""
@@ -338,7 +352,7 @@ class MakerWorldImporterScript(orca.script.ScriptPluginCapabilityBase):
                 skipped_unsupported.append(f"{key} = {value}")
             else:
                 old_val = converted_config.get(key)
-                new_val = normalize_orca_value(value)
+                new_val = align_value_shape(normalize_orca_value(value), old_val)
 
                 # Flag speeds/accelerations that exceed the active printer's limits
                 num_val = to_float(new_val)
