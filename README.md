@@ -81,7 +81,7 @@ Add both of these file-operation events (click **Add** after each one):
 - **Manual Install:** If installing outside Orca Cloud, download `makerworld_importer_any.py` and load it via **Plugins -> Browse plugins -> Install local plugin**.
 
 ## Changelog
-- **v1.0.1:** Fixed `layer_height` and `initial_layer_print_height` (and other preset-default keys) resetting to the base preset on load by registering all changed process keys in `different_settings_to_system[0]`, preserving active filament/printer diff slots, and stripping stale pre-sliced source G-code caches.
+- **v1.0.1:** Fixed `layer_height` and `initial_layer_print_height` (and other preset-default keys) resetting to the base preset on load by registering all changed process keys in `different_settings_to_system[0]`, preserving active filament/printer diff slots, and stripping stale pre-sliced source G-code caches *(thanks to @orca_5c685f038f for reporting!)*.
 - **v1.0.0:** Initial release.
 
 ## License
