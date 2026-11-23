@@ -80,5 +80,9 @@ Add both of these file-operation events (click **Add** after each one):
 - **Linux Users:** Requires `zenity` (GNOME/GTK) or `kdialog` (KDE/Qt) installed for the file picker dialog.
 - **Manual Install:** If installing outside Orca Cloud, download `makerworld_importer_any.py` and load it via **Plugins -> Browse plugins -> Install local plugin**.
 
+## Changelog
+- **v1.0.1:** Fixed `layer_height` and `initial_layer_print_height` (and other preset-default keys) resetting to the base preset on load by registering all changed process keys in `different_settings_to_system[0]`, preserving active filament/printer diff slots, and stripping stale pre-sliced source G-code caches.
+- **v1.0.0:** Initial release.
+
 ## License
 MIT
