@@ -12,7 +12,7 @@ This plugin solves that by taking your active **Printer + Bed + Filament + Proce
 - **Process-Only Overlay:** Copies Quality, Strength, Speed, Support, and Other print settings while ignoring incompatible Bambu-specific keys.
 - **Printer-Named Output:** Automatically names output files using your active printer (e.g., `model_Qidi_Q2_0.4_nozzle.3mf` and `model_Qidi_Q2_0.4_nozzle_report.txt`).
 - **Built-in Safety Checks:** Flags nozzle diameter mismatches, multi-color/AMS slot differences, unsaved printer changes, and speeds/accelerations that exceed your printer's hardware limits.
-- **Categorized Change Log:** Saves a `*_report.txt` next to the converted `.3mf` showing every changed setting (`old --> new`) grouped by tab, plus every unsupported setting that was skipped.
+- **Categorized Change Log:** Writes every genuinely modified setting (`old --> new`) grouped by OrcaSlicer tab—filtering out unchanged scalar/list noise—plus a full list of skipped unsupported settings.
 - **Cross-Platform:** Uses native OS file pickers on Windows (PowerShell with UTF-8 support), macOS (`osascript`), and Linux (`zenity` or `kdialog`).
 
 ## Installation
@@ -81,8 +81,12 @@ Add both of these file-operation events (click **Add** after each one):
 - **Manual Install:** If installing outside Orca Cloud, download `makerworld_importer_any.py` and load it via **Plugins -> Browse plugins -> Install local plugin**.
 
 ## Changelog
-- **v1.0.1:** Fixed `layer_height` and `initial_layer_print_height` (and other preset-default keys) resetting to the base preset on load by registering all changed process keys in `different_settings_to_system[0]`, preserving active filament/printer diff slots, and stripping stale pre-sliced source G-code caches *(thanks to @orca_5c685f038f for reporting!)*.
-- **v1.0.0:** Initial release.
+- **v1.0.2:**
+  - **Cleaner Report Diffs:** Aligns Bambu vs. OrcaSlicer scalar and list value formats (`1` vs. `['1']`) to eliminate false-positive diffs in `_report.txt` and preserve expected JSON types across single and multi-toolhead printers.
+- **v1.0.1:**
+  - **Layer Height & Preset-Default Retention:** Fixed `layer_height`, `initial_layer_print_height`, and other preset-default keys resetting to your base preset on load by registering all changed process keys in `different_settings_to_system[0]` and preserving active filament/printer diff slots *(thanks to @orca_5c685f038f for reporting!)*.
+  - **Safer `.3mf` Repackaging:** Strips pre-sliced source G-code (`plate_*.gcode`, `.gcode.md5`) and `slice_info.config` caches for hardware safety—preventing foreign printer start macros, temperatures, or bed limits from accidentally running on your machine and forcing a clean re-slice—and adds case-insensitive `Metadata/project_settings.config` lookup.
+- **v1.0.0:** Initial release
 
 ## License
 MIT
