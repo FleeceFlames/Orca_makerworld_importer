@@ -5,9 +5,10 @@
 # [tool.orcaslicer.plugin]
 # name = "MakerWorld Settings Importer"
 # description = "Safely imports MakerWorld 3MF process settings onto your active printer with nozzle, speed, and multi-color checks."
-# author = "Leojex200"
-# version = "1.0.0"
+# author = "FleeceFlames"
+# version = "1.0.1"
 # ///
+# SPDX-License-Identifier: MIT
 
 import json
 import os
@@ -94,6 +95,8 @@ EXACT_EXCLUDED_KEYS = {
     "version",
     "name",
     "print_settings_id",
+    # v1.0.1 fix (reported by Halil Çimen): never copy source diff list verbatim
+    "different_settings_to_system",
 }
 
 
@@ -109,6 +112,15 @@ def is_excluded_key(key: str) -> bool:
     )
 
 
+def is_stale_slice_cache(filename: str) -> bool:
+    """Identifies cached source slice files that should be stripped from converted 3MFs."""
+    low = filename.lstrip("/").lower()
+    return low == "metadata/slice_info.config" or (
+        low.startswith("metadata/plate_")
+        and (low.endswith(".gcode") or low.endswith(".gcode.md5"))
+    )
+
+
 def clean_label(name: str) -> str:
     """Strips OrcaSlicer's leading '* ' unsaved-changes indicator from preset names."""
     if not name:
@@ -121,9 +133,7 @@ def sanitize_filename_part(name: str) -> str:
     Converts a printer name into a safe filename suffix across Windows, macOS, and Linux.
     Example: 'Qidi Q2 0.4 nozzle - Copy' -> 'Qidi_Q2_0.4_nozzle_-_Copy'
     """
-    # Remove characters disallowed in Windows/macOS/Linux filenames
     safe = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "", name)
-    # Replace spaces with underscores and collapse repeated underscores
     safe = re.sub(r"\s+", "_", safe.strip())
     safe = re.sub(r"_+", "_", safe).strip("._")
     return safe or "converted"
@@ -173,7 +183,6 @@ def pick_3mf_file():
     Returns a tuple: (selected_filepath, error_message_or_None).
     """
     if sys.platform == "win32":
-        # Force UTF-8 output so filenames with accents/symbols do not get corrupted
         ps_script = (
             "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; "
             "Add-Type -AssemblyName System.Windows.Forms; "
@@ -202,7 +211,6 @@ def pick_3mf_file():
         return result.stdout.strip(), None
 
     else:
-        # Support both GNOME/GTK (zenity) and KDE/Qt (kdialog) Linux environments
         if shutil.which("zenity"):
             cmd = [
                 "zenity",
@@ -276,11 +284,15 @@ class MakerWorldImporterScript(orca.script.ScriptPluginCapabilityBase):
         # 4. Extract Metadata/project_settings.config from the .3mf ZIP archive
         try:
             with zipfile.ZipFile(input_path, "r") as zin:
-                if "Metadata/project_settings.config" not in zin.namelist():
+                target_entry = next(
+                    (n for n in zin.namelist() if n.lstrip("/").lower() == "metadata/project_settings.config"),
+                    None,
+                )
+                if not target_entry:
                     return orca.ExecutionResult.error(
                         "No 'Metadata/project_settings.config' found in this 3MF."
                     )
-                raw_config = zin.read("Metadata/project_settings.config")
+                raw_config = zin.read(target_entry)
                 mw_settings = json.loads(raw_config.decode("utf-8"))
         except Exception as e:
             return orca.ExecutionResult.error(f"Failed to read 3MF: {e}")
@@ -314,6 +326,7 @@ class MakerWorldImporterScript(orca.script.ScriptPluginCapabilityBase):
             "Support": [],
             "Other": [],
         }
+        changed_process_keys = set()
         unchanged_count = 0
         ignored_printer_or_filament = 0
         skipped_unsupported = []
@@ -343,12 +356,13 @@ class MakerWorldImporterScript(orca.script.ScriptPluginCapabilityBase):
 
                 # Record only values that actually differ from the active preset
                 if old_val != new_val:
+                    changed_process_keys.add(key)
                     cat = categorize_setting(key)
                     categorized_changes[cat].append(f"{key}: {old_val}  -->  {new_val}")
                 else:
                     unchanged_count += 1
 
-                converted_config[key] = value
+                converted_config[key] = new_val
 
         for cat in categorized_changes:
             categorized_changes[cat].sort()
@@ -363,6 +377,25 @@ class MakerWorldImporterScript(orca.script.ScriptPluginCapabilityBase):
         if process_name:
             converted_config["print_settings_id"] = process_name
 
+        # v1.0.1 fix (reported by Halil Çimen):
+        # Register EVERY changed process key in different_settings_to_system[0]
+        # so OrcaSlicer preserves preset-default keys (like layer_height and
+        # initial_layer_print_height) instead of resetting them to the user's
+        # base process preset on load.
+        expected_slots = max(1, len(filament_names)) + 2  # process + N filaments + printer
+        diff_list = converted_config.get("different_settings_to_system")
+        if not isinstance(diff_list, list):
+            diff_list = [""] * expected_slots
+        else:
+            diff_list = [str(x) if x is not None else "" for x in diff_list]
+            if len(diff_list) < expected_slots:
+                diff_list.extend([""] * (expected_slots - len(diff_list)))
+
+        existing_proc_diffs = {k.strip() for k in diff_list[0].split(";") if k.strip()}
+        existing_proc_diffs.update(changed_process_keys)
+        diff_list[0] = ";".join(sorted(existing_proc_diffs))
+        converted_config["different_settings_to_system"] = diff_list
+
         # 7. Build output paths using the sanitized printer name
         base, ext = os.path.splitext(input_path)
         printer_suffix = sanitize_filename_part(printer_name)
@@ -375,7 +408,9 @@ class MakerWorldImporterScript(orca.script.ScriptPluginCapabilityBase):
                 output_path, "w", zipfile.ZIP_DEFLATED
             ) as zout:
                 for item in zin.infolist():
-                    if item.filename == "Metadata/project_settings.config":
+                    if is_stale_slice_cache(item.filename):
+                        continue
+                    if item.filename == target_entry:
                         zout.writestr(
                             item,
                             json.dumps(converted_config, indent=4).encode("utf-8"),
